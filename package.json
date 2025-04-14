@@ -11,6 +11,8 @@
   "dependencies": {
     "@prisma/client": "^6.2.1",
 <<<<<<< HEAD
+=======
+<<<<<<< HEAD
     "@radix-ui/react-avatar": "^1.1.2",
     "@radix-ui/react-slot": "^1.1.1",
     "bcryptjs": "^2.4.3",
@@ -20,6 +22,7 @@
     "express": "^4.21.2",
     "lucide-react": "^0.471.1",
 =======
+>>>>>>> main
     "@radix-ui/react-avatar": "^1.1.4",
     "@radix-ui/react-dialog": "^1.1.7",
     "@radix-ui/react-hover-card": "^1.1.7",
@@ -35,7 +38,10 @@
     "cors": "^2.8.5",
     "express": "^4.21.2",
     "lucide-react": "^0.471.2",
+<<<<<<< HEAD
+=======
 >>>>>>> 6204393 (#m 화면 레이아웃 변경 및 채널 추가)
+>>>>>>> main
     "next": "15.1.4",
     "next-auth": "^4.24.11",
     "prisma": "^6.2.1",
