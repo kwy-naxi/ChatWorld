@@ -1,11 +1,27 @@
+<<<<<<< HEAD
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+=======
+<<<<<<< HEAD
+import { redirect } from 'next/navigation';
+
+export default function Home() {
+  redirect('/chat');
+=======
+"use client";
+
+import { useState, useEffect } from "react";
+>>>>>>> main
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+<<<<<<< HEAD
 import { Send, Plus, Hash, Settings, Trash2, Search, Users, Smile, Reply, MessageSquare } from "lucide-react";
+=======
+import { Send, Plus, Hash, Settings, Trash2, Search, Users, Smile } from "lucide-react";
+>>>>>>> main
 import { io } from "socket.io-client";
 import {
   Dialog,
@@ -51,11 +67,14 @@ interface Message {
     emoji: string;
     users: string[];
   }[];
+<<<<<<< HEAD
   replyTo?: {
     id: string;
     text: string;
     sender: string;
   };
+=======
+>>>>>>> main
 }
 
 interface Channel {
@@ -107,10 +126,13 @@ export default function Home() {
     name: "사용자",
     color: "purple"
   });
+<<<<<<< HEAD
   const [isMessageSearchOpen, setIsMessageSearchOpen] = useState(false);
   const [messageSearchQuery, setMessageSearchQuery] = useState("");
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const messageEndRef = useRef<HTMLDivElement>(null);
+=======
+>>>>>>> main
 
   useEffect(() => {
     const newSocket = io("http://localhost:3001");
@@ -143,6 +165,7 @@ export default function Home() {
     };
   }, [selectedChannel.id]);
 
+<<<<<<< HEAD
   // 메시지 자동 스크롤
   useEffect(() => {
     messageEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -166,6 +189,17 @@ export default function Home() {
         text: replyingTo.text,
         sender: replyingTo.sender
       } : undefined
+=======
+  const handleSendMessage = () => {
+    if (!message.trim() || !socket) return;
+
+    const newMessage = {
+      id: Math.random().toString(),
+      text: message,
+      sender: "user",
+      timestamp: Date.now(),
+      channelId: selectedChannel.id
+>>>>>>> main
     };
 
     socket.emit("send-message", newMessage);
@@ -174,7 +208,10 @@ export default function Home() {
       [selectedChannel.id]: [...(prev[selectedChannel.id] || []), newMessage]
     }));
     setMessage("");
+<<<<<<< HEAD
     setReplyingTo(null);
+=======
+>>>>>>> main
   };
 
   const handleAddChannel = () => {
@@ -301,11 +338,14 @@ export default function Home() {
     channel.description?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+<<<<<<< HEAD
   const filteredMessages = messagesByChannel[selectedChannel.id]?.filter(msg =>
     msg.text.toLowerCase().includes(messageSearchQuery.toLowerCase()) ||
     msg.sender.toLowerCase().includes(messageSearchQuery.toLowerCase())
   ) || [];
 
+=======
+>>>>>>> main
   return (
     <div className="flex h-full">
       {/* 사이드바 */}
@@ -496,6 +536,7 @@ export default function Home() {
             </div>
           </div>
           
+<<<<<<< HEAD
           <div className="flex items-center gap-2">
             <Button
               variant="ghost"
@@ -574,11 +615,47 @@ export default function Home() {
           </CommandList>
         </CommandDialog>
 
+=======
+          <HoverCard>
+            <HoverCardTrigger asChild>
+              <Button variant="ghost" size="sm" className="gap-2">
+                <Users className="h-4 w-4" />
+                {selectedChannel.participants.length}
+              </Button>
+            </HoverCardTrigger>
+            <HoverCardContent className="w-80">
+              <div className="space-y-2">
+                <h4 className="text-sm font-semibold">채널 참여자</h4>
+                <div className="grid gap-2">
+                  {selectedChannel.participants.map(user => (
+                    <div key={user.id} className="flex items-center gap-2">
+                      <Avatar>
+                        <AvatarFallback style={{ backgroundColor: user.color }}>
+                          {user.name[0]}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="text-sm">
+                        {user.name}
+                        {user.id === currentUser.id && " (나)"}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </HoverCardContent>
+          </HoverCard>
+        </div>
+
+>>>>>>> main
         {/* 메시지 영역 */}
         <ScrollArea className="flex-1 p-4">
           <div className="space-y-4">
             {messagesByChannel[selectedChannel.id]?.map((msg) => (
+<<<<<<< HEAD
               <div key={msg.id} id={msg.id} className="group flex items-start gap-3">
+=======
+              <div key={msg.id} className="group flex items-start gap-3">
+>>>>>>> main
                 <Avatar>
                   <AvatarFallback style={{ backgroundColor: "purple" }}>
                     {msg.sender.charAt(0).toUpperCase()}
@@ -591,6 +668,7 @@ export default function Home() {
                       {new Date(msg.timestamp).toLocaleTimeString()}
                     </span>
                   </div>
+<<<<<<< HEAD
 
                   {/* 답장 대상 메시지 */}
                   {msg.replyTo && (
@@ -602,6 +680,8 @@ export default function Home() {
                     </div>
                   )}
 
+=======
+>>>>>>> main
                   <p className="text-gray-900">{msg.text}</p>
                   
                   {/* 이모지 반응 */}
@@ -627,6 +707,7 @@ export default function Home() {
                   )}
                 </div>
 
+<<<<<<< HEAD
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   {/* 답장 버튼 */}
                   <Button
@@ -667,11 +748,41 @@ export default function Home() {
               </div>
             ))}
             <div ref={messageEndRef} />
+=======
+                {/* 이모지 추가 버튼 */}
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <Smile className="h-4 w-4" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-2">
+                    <div className="flex gap-1">
+                      {EMOJIS.map(emoji => (
+                        <button
+                          key={emoji}
+                          className="hover:bg-gray-100 p-2 rounded"
+                          onClick={() => handleAddReaction(msg.id, emoji)}
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </div>
+            ))}
+>>>>>>> main
           </div>
         </ScrollArea>
 
         {/* 메시지 입력 영역 */}
         <div className="p-4 border-t">
+<<<<<<< HEAD
           {replyingTo && (
             <div className="flex items-center gap-2 mb-2 p-2 bg-gray-50 rounded">
               <div className="flex-1">
@@ -690,6 +801,8 @@ export default function Home() {
               </Button>
             </div>
           )}
+=======
+>>>>>>> main
           <div className="flex gap-2">
             <Input
               value={message}
@@ -706,4 +819,8 @@ export default function Home() {
       </div>
     </div>
   );
+<<<<<<< HEAD
+=======
+>>>>>>> 6204393 (#m 화면 레이아웃 변경 및 채널 추가)
+>>>>>>> main
 }
