@@ -40,6 +40,23 @@ io.on("connection", (socket) => {
     io.emit("receive-message", enhancedMessage);
   });
 
+  // 메시지 편집 이벤트 핸들러
+  socket.on("edit-message", (data) => {
+    io.emit("message-edited", {
+      messageId: data.messageId,
+      newText: data.newText,
+      timestamp: Date.now()
+    });
+  });
+
+  // 메시지 삭제 이벤트 핸들러
+  socket.on("delete-message", (messageId) => {
+    io.emit("message-deleted", {
+      messageId,
+      timestamp: Date.now()
+    });
+  });
+
   // 연결 해제 처리
   socket.on("disconnect", () => {
     const username = connectedUsers.get(socket.id);
