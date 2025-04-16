@@ -18,56 +18,80 @@ const io = new Server(httpServer, {
 const connectedUsers = new Map();
 
 io.on("connection", (socket) => {
-  console.log(`사용자 연결됨: ${socket.id}`);
-  
-  // 임시 사용자 이름 생성
-  const username = `사용자${Math.floor(Math.random() * 1000)}`;
-  connectedUsers.set(socket.id, username);
+  console.log("User connected:", socket.id);
 
-  // 새 사용자 입장 알림
-  io.emit("user-connected", {
-    message: `${username}님이 입장하셨습니다.`,
-    timestamp: Date.now()
+  // 유저 연결 시 정보 저장
+  socket.on("user-join", (userData) => {
+    const userInfo = {
+      id: userData.id,
+      name: userData.name,
+      color: userData.color
+    };
+    
+    connectedUsers.set(userData.id, userInfo);
+    
+    // 입장 메시지와 유저 목록을 함께 전송
+    io.emit("user-connected", {
+      message: `${userData.name}님이 입장하셨습니다.`,
+      timestamp: Date.now(),
+      user: userInfo
+    });
+    
+    // 모든 클라이언트에게 유저 목록 업데이트
+    io.emit("user-list-update", Array.from(connectedUsers.values()));
   });
 
-  // 메시지 수신 및 브로드캐스트
+  // 메시지 전송
   socket.on("send-message", (message) => {
+    // 메시지에 발신자 정보 추가
+    const userInfo = connectedUsers.get(message.senderId);
     const enhancedMessage = {
       ...message,
-      sender: username,
       timestamp: Date.now()
     };
     io.emit("receive-message", enhancedMessage);
   });
 
-  // 메시지 편집 이벤트 핸들러
+  // 메시지 수정
   socket.on("edit-message", (data) => {
+    const userInfo = connectedUsers.get(data.senderId);
     io.emit("message-edited", {
-      messageId: data.messageId,
-      newText: data.newText,
+      ...data,
       timestamp: Date.now()
     });
   });
 
-  // 메시지 삭제 이벤트 핸들러
-  socket.on("delete-message", (messageId) => {
+  // 메시지 삭제
+  socket.on("delete-message", (data) => {
+    const userInfo = connectedUsers.get(data.senderId);
     io.emit("message-deleted", {
-      messageId,
+      ...data,
       timestamp: Date.now()
     });
   });
 
-  // 연결 해제 처리
+  // 연결 해제 시
   socket.on("disconnect", () => {
-    const username = connectedUsers.get(socket.id);
-    console.log(`사용자 연결 해제: ${username}`);
+    console.log("User disconnected:", socket.id);
     
-    io.emit("user-disconnected", {
-      message: `${username}님이 퇴장하셨습니다.`,
-      timestamp: Date.now()
-    });
-    
-    connectedUsers.delete(socket.id);
+    // 연결 해제된 사용자 찾기
+    let disconnectedUser = null;
+    for (const [userId, userInfo] of connectedUsers.entries()) {
+      if (userInfo.id === socket.id) {
+        disconnectedUser = userInfo;
+        break;
+      }
+    }
+
+    if (disconnectedUser) {
+      io.emit("user-disconnected", {
+        message: `${disconnectedUser.name}님이 퇴장하셨습니다.`,
+        timestamp: Date.now(),
+        userId: disconnectedUser.id
+      });
+      connectedUsers.delete(disconnectedUser.id);
+      io.emit("user-list-update", Array.from(connectedUsers.values()));
+    }
   });
 });
 
