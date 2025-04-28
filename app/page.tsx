@@ -5,7 +5,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Send, Plus, Hash, Settings, Trash2, Search, Users, Smile } from "lucide-react";
+import { Send, Plus, Hash, Settings, Trash2, Search, Users, Smile, X, Upload, File } from "lucide-react";
 import { io, Socket } from "socket.io-client";
 import {
   Dialog,
@@ -43,6 +43,24 @@ interface Message {
   senderId: string;
   timestamp: number;
   channelId: string;
+  edited?: boolean;
+  reactions?: {
+    emoji: string;
+    users: string[];
+  }[];
+  file?: {
+    name: string;
+    path: string;
+    size: number;
+    type: string;
+  };
+}
+
+interface MessageEventData {
+  messageId: string;
+  channelId: string;
+  timestamp: number;
+  newText?: string;
   reactions?: {
     emoji: string;
     users: string[];
@@ -91,6 +109,9 @@ export default function Home() {
   const [editingChannel, setEditingChannel] = useState<Channel | null>(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [isUploading, setIsUploading] = useState(false);
 
   // 클라이언트 사이드에서만 localStorage 접근
   useEffect(() => {
@@ -147,7 +168,6 @@ export default function Home() {
 
     // 유저 목록 업데이트
     newSocket.on("user-list-update", (users: User[]) => {
-      // 현재 사용자를 항상 포함하도록 수정
       const updatedUsers = users.filter(user => user.id !== currentUser.id);
       setConnectedUsers([currentUser, ...updatedUsers]);
     });
@@ -158,6 +178,7 @@ export default function Home() {
         id: crypto.randomUUID(),
         text: data.message,
         sender: "system",
+        senderId: "system",
         timestamp: data.timestamp,
         channelId: selectedChannel.id
       };
@@ -187,6 +208,7 @@ export default function Home() {
         id: crypto.randomUUID(),
         text: data.message,
         sender: "system",
+        senderId: "system",
         timestamp: data.timestamp,
         channelId: selectedChannel.id
       };
@@ -208,7 +230,7 @@ export default function Home() {
     // 메시지 수신 처리
     newSocket.on("receive-message", (message: Message) => {
       // 자신이 보낸 메시지는 이미 표시되어 있으므로 무시
-      if (message.senderId === currentUser.id) return;
+      if (message.senderId === currentUser.id && !message.file) return;
 
       setMessagesByChannel(prev => {
         const currentMessages = prev[message.channelId] || [];
@@ -216,9 +238,63 @@ export default function Home() {
           return prev;
         }
         const updatedMessages = [...currentMessages, message];
-        const newState = { ...prev };
-        newState[message.channelId] = updatedMessages;
-        return newState;
+        return {
+          ...prev,
+          [message.channelId]: updatedMessages
+        };
+      });
+    });
+
+    // 메시지 수정 이벤트 처리
+    newSocket.on("message-edited", (data: MessageEventData) => {
+      setMessagesByChannel(prev => {
+        const currentMessages = prev[data.channelId] || [];
+        const updatedMessages = currentMessages.map(msg => {
+          if (msg.id === data.messageId) {
+            return {
+              ...msg,
+              text: data.newText || msg.text,
+              edited: true
+            } as Message;
+          }
+          return msg;
+        });
+        return {
+          ...prev,
+          [data.channelId]: updatedMessages
+        };
+      });
+    });
+
+    // 메시지 삭제 이벤트 처리
+    newSocket.on("message-deleted", (data: MessageEventData) => {
+      setMessagesByChannel(prev => {
+        const currentMessages = prev[data.channelId] || [];
+        const updatedMessages = currentMessages.filter(msg => msg.id !== data.messageId);
+        return {
+          ...prev,
+          [data.channelId]: updatedMessages
+        };
+      });
+    });
+
+    // 이모지 반응 업데이트 이벤트 처리
+    newSocket.on("reaction-updated", (data: MessageEventData) => {
+      setMessagesByChannel(prev => {
+        const currentMessages = prev[data.channelId] || [];
+        const updatedMessages = currentMessages.map(msg => {
+          if (msg.id === data.messageId) {
+            return {
+              ...msg,
+              reactions: data.reactions || []
+            } as Message;
+          }
+          return msg;
+        });
+        return {
+          ...prev,
+          [data.channelId]: updatedMessages
+        };
       });
     });
 
@@ -232,7 +308,8 @@ export default function Home() {
     socket.emit("edit-message", {
       messageId,
       newText,
-      senderId: currentUser.id
+      senderId: currentUser.id,
+      channelId: selectedChannel.id
     });
   };
 
@@ -240,7 +317,18 @@ export default function Home() {
     if (!socket) return;
     socket.emit("delete-message", {
       messageId,
-      senderId: currentUser.id
+      senderId: currentUser.id,
+      channelId: selectedChannel.id
+    });
+  };
+
+  const handleToggleReaction = (messageId: string, emoji: string) => {
+    if (!socket) return;
+    socket.emit("toggle-reaction", {
+      messageId,
+      emoji,
+      userId: currentUser.id,
+      channelId: selectedChannel.id
     });
   };
 
@@ -361,6 +449,63 @@ export default function Home() {
         [selectedChannel.id]: updatedMessages
       };
     });
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 10 * 1024 * 1024) {
+        alert('파일 크기는 10MB를 초과할 수 없습니다.');
+        return;
+      }
+      setSelectedFile(file);
+    }
+  };
+
+  const handleFileUpload = async () => {
+    if (!selectedFile || !socket) return;
+
+    const formData = new FormData();
+    formData.append('file', selectedFile);
+
+    try {
+      setIsUploading(true);
+      const response = await fetch('http://localhost:3001/upload', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) {
+        throw new Error('파일 업로드에 실패했습니다.');
+      }
+
+      const fileInfo = await response.json();
+
+      // 파일 공유 메시지 전송
+      socket.emit("share-file", {
+        text: `파일을 공유했습니다: ${fileInfo.name}`,
+        sender: currentUser.name,
+        senderId: currentUser.id,
+        channelId: selectedChannel.id,
+        file: fileInfo
+      });
+
+      setSelectedFile(null);
+      setUploadProgress(0);
+    } catch (error) {
+      console.error('파일 업로드 오류:', error);
+      alert('파일 업로드에 실패했습니다.');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
   const filteredChannels = channels.filter(channel =>
@@ -608,9 +753,47 @@ export default function Home() {
                     </span>
                     <span className="text-xs text-gray-500">
                       {new Date(msg.timestamp).toLocaleTimeString()}
+                      {msg.edited && " (수정됨)"}
                     </span>
                   </div>
                   <p className="text-gray-900">{msg.text}</p>
+                  
+                  {/* 이미지 표시 */}
+                  {msg.file && (
+                    <div className="mt-2 relative group">
+                      {msg.file.type.startsWith('image/') ? (
+                        <>
+                          <img 
+                            src={msg.file.path} 
+                            alt={msg.file.name}
+                            className="max-w-md rounded-lg border"
+                          />
+                          {msg.senderId === currentUser.id && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-white/80 hover:bg-white"
+                              onClick={() => {
+                                if (confirm("이 이미지를 삭제하시겠습니까?")) {
+                                  handleDeleteMessage(msg.id);
+                                }
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4 text-red-500" />
+                            </Button>
+                          )}
+                        </>
+                      ) : (
+                        <div className="flex items-center gap-2 p-2 border rounded-lg">
+                          <File className="h-4 w-4" />
+                          <div>
+                            <p className="text-sm font-medium">{msg.file.name}</p>
+                            <p className="text-xs text-gray-500">{formatFileSize(msg.file.size)}</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   
                   {/* 이모지 반응 */}
                   {msg.reactions && msg.reactions.length > 0 && (
@@ -623,7 +806,7 @@ export default function Home() {
                               ? "bg-purple-100 border-purple-200"
                               : "bg-gray-50 border-gray-200"
                           } hover:bg-purple-50 transition-colors`}
-                          onClick={() => handleAddReaction(msg.id, reaction.emoji)}
+                          onClick={() => handleToggleReaction(msg.id, reaction.emoji)}
                         >
                           <span>{reaction.emoji}</span>
                           <span className="text-xs text-gray-500">
@@ -634,6 +817,46 @@ export default function Home() {
                     </div>
                   )}
                 </div>
+
+                {/* 메시지 수정/삭제 버튼 */}
+                {msg.senderId === currentUser.id && (
+                  <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <Settings className="h-4 w-4" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-2">
+                        <div className="flex flex-col gap-2">
+                          <Button
+                            variant="ghost"
+                            className="w-full justify-start"
+                            onClick={() => {
+                              const newText = prompt("메시지를 수정하세요:", msg.text);
+                              if (newText && newText !== msg.text) {
+                                handleEditMessage(msg.id, newText);
+                              }
+                            }}
+                          >
+                            수정
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            className="w-full justify-start text-red-500"
+                            onClick={() => {
+                              if (confirm("메시지를 삭제하시겠습니까?")) {
+                                handleDeleteMessage(msg.id);
+                              }
+                            }}
+                          >
+                            삭제
+                          </Button>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                )}
 
                 {/* 이모지 추가 버튼 */}
                 <Popover>
@@ -652,7 +875,7 @@ export default function Home() {
                         <button
                           key={emoji}
                           className="hover:bg-gray-100 p-2 rounded"
-                          onClick={() => handleAddReaction(msg.id, emoji)}
+                          onClick={() => handleToggleReaction(msg.id, emoji)}
                         >
                           {emoji}
                         </button>
@@ -667,17 +890,59 @@ export default function Home() {
 
         {/* 메시지 입력 영역 */}
         <div className="p-4 border-t">
-          <div className="flex gap-2">
-            <Input
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              placeholder={`${selectedChannel.name}에 메시지 보내기`}
-              className="flex-1"
-              onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
-            />
-            <Button onClick={handleSendMessage}>
-              <Send className="h-4 w-4" />
-            </Button>
+          <div className="flex flex-col gap-2">
+            {selectedFile && (
+              <div className="flex items-center gap-2 p-2 bg-gray-50 rounded">
+                <div className="flex-1">
+                  <p className="text-sm font-medium">{selectedFile.name}</p>
+                  <p className="text-xs text-gray-500">{formatFileSize(selectedFile.size)}</p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setSelectedFile(null)}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+            <div className="flex gap-2">
+              <Input
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                placeholder={`${selectedChannel.name}에 메시지 보내기`}
+                className="flex-1"
+                onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
+              />
+              <div className="flex gap-2">
+                <Input
+                  type="file"
+                  id="file-upload"
+                  className="hidden"
+                  onChange={handleFileSelect}
+                  accept="image/*,.pdf,.doc,.docx"
+                />
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => document.getElementById('file-upload')?.click()}
+                >
+                  <Upload className="h-4 w-4" />
+                </Button>
+                <Button onClick={handleSendMessage}>
+                  <Send className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+            {selectedFile && (
+              <Button
+                onClick={handleFileUpload}
+                disabled={isUploading}
+                className="w-full"
+              >
+                {isUploading ? '업로드 중...' : '파일 공유'}
+              </Button>
+            )}
           </div>
         </div>
       </div>
